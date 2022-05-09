@@ -23,12 +23,11 @@ if (!"address" %in% names(d)) stop("no column called address found in the input 
 ## clean up addresses / classify 'bad' addresses
 d$address <- dht::clean_address(d$address)
 d$po_box <- dht::address_is_po_box(d$address)
-d$cincy_inst_foster_addr <- dht::address_is_institutional(d$address)
 d$non_address_text <- dht::address_is_nonaddress(d$address)
 
 ## exclude 'bad' addresses from geocoding
-d_excluded_for_address <- dplyr::filter(d, cincy_inst_foster_addr | po_box | non_address_text)
-d_for_geocoding <- dplyr::filter(d, !cincy_inst_foster_addr & !po_box & !non_address_text)
+d_excluded_for_address <- dplyr::filter(d, non_address_text)
+d_for_geocoding <- dplyr::filter(d, !non_address_text)
 
 out_template <- tibble(
   street = NA, zip = NA, city = NA, state = NA,
@@ -104,21 +103,18 @@ out_file <- dplyr::bind_rows(d_excluded_for_address, d_for_geocoding) %>%
   dplyr::mutate(
     geocode_result = dplyr::case_when(
       po_box ~ "po_box",
-      cincy_inst_foster_addr ~ "cincy_inst_foster_addr",
       non_address_text ~ "non_address_text",
       (!precision %in% c("street", "range")) | (score < opt$score_threshold) ~ "imprecise_geocode",
       TRUE ~ "geocoded"
-    ),
-    lat = ifelse(geocode_result == "imprecise_geocode", NA, lat),
-    lon = ifelse(geocode_result == "imprecise_geocode", NA, lon)
+    )
   ) %>%
-  select(-po_box, -cincy_inst_foster_addr, -non_address_text) # note, just "PO" not "PO BOX" is not flagged as "po_box"
+  select(-po_box, -non_address_text) # note, just "PO" not "PO BOX" is not flagged as "po_box"
 
 ## summarize geocoding results
 geocode_summary <- out_file %>%
   mutate(geocode_result = factor(geocode_result,
     levels = c(
-      "po_box", "cincy_inst_foster_addr", "non_address_text",
+      "po_box", "non_address_text",
       "imprecise_geocode", "geocoded"
     ),
     ordered = TRUE
